@@ -163,6 +163,22 @@ def create_patch_3d(seizure_detected):
 # ------------------------
 # Caretaker phone UI block
 # ------------------------
+# Step 3 – Caretaker Alert
+st.subheader("Step 3 – Caretaker Mobile Alert")
+
+if seizure_detected:
+    st.success("📱 Alert sent to caretaker: Seizure detected! Drug released.")
+    st.markdown(
+        """
+        **Message Preview:**
+        > ⚠️ Seizure detected in patient *EP-001*.  
+        > Drug bolus delivered automatically.  
+        > Monitoring system active.
+        """,
+        unsafe_allow_html=True
+    )
+else:
+    st.info("📱 Monitoring active. No seizure detected.")
 
 def caretaker_phone_ui(seizure_detected, detection_info):
     """
@@ -378,3 +394,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
