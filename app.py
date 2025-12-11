@@ -304,6 +304,7 @@ def main():
 
     min_duration_samples = int(0.5 * fs)
 
+    # >>> seizure_detected is DEFINED HERE <<<
     seizure_detected, det_start_idx, det_end_idx = detect_seizure(
         rms, threshold, min_duration_samples
     )
@@ -394,4 +395,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
