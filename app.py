@@ -150,22 +150,69 @@ def main():
     duration_s = st.sidebar.slider("Signal duration (seconds)", 5, 20, 10)
     fs = 1000
 
+    # Signal generation & processing
     t, raw_signal, (sz_start, sz_end) = simulate_semg_with_seizure(duration_s, fs)
     smoothed = simple_smoothing(raw_signal, int(0.01 * fs))
     rms = compute_rms(smoothed, int(0.1 * fs))
 
+    # Threshold control
     base_threshold = np.mean(rms) + 2 * np.std(rms)
     st.sidebar.subheader("Seizure Detection Threshold")
-    threshold_factor = st.sidebar.slider("Threshold level (relative to baseline)", 0.5, 2.0, 1.0, 0.05)
+    threshold_factor = st.sidebar.slider(
+        "Threshold level (relative to baseline)", 0.5, 2.0, 1.0, 0.05
+    )
     threshold = base_threshold * threshold_factor
 
-    seizure_detected, det_start_idx, det_end_idx = detect_seizure(rms, threshold, int(0.5 * fs))
+    # Seizure detection
+    seizure_detected, det_start_idx, det_end_idx = detect_seizure(
+        rms, threshold, int(0.5 * fs)
+    )
     det_start_time = t[det_start_idx] if seizure_detected else 0.0
     det_end_time = t[det_end_idx] if seizure_detected else 0.0
 
+    # Drug effect
     treated_signal = apply_drug_effect(raw_signal, det_start_idx, det_end_idx)
     smoothed_treated = simple_smoothing(treated_signal, int(0.01 * fs))
     rms_treated = compute_rms(smoothed_treated, int(0.1 * fs))
+
+    # ------------------------
+    # Top status dashboard
+    # ------------------------
+    st.markdown("### Live Patch Status Dashboard")
+
+    col_a, col_b, col_c = st.columns(3)
+
+    # Card 1 – Seizure status
+    if seizure_detected:
+        seizure_text = "DETECTED"
+        seizure_help = f"Seizure detected between {det_start_time:.2f}s and {det_end_time:.2f}s."
+    else:
+        seizure_text = "NORMAL"
+        seizure_help = "RMS did not cross threshold for the minimum duration."
+
+    col_a.metric("🧠 Seizure Status", seizure_text, help=seizure_help)
+
+    # Card 2 – Drug delivery
+    if seizure_detected:
+        drug_text = "EMERGENCY BOLUS"
+        drug_help = "Patch delivered a rapid dose in response to seizure."
+    else:
+        drug_text = "BASELINE"
+        drug_help = "Patch operating in background / maintenance mode."
+
+    col_b.metric("💊 Drug Delivery", drug_text, help=drug_help)
+
+    # Card 3 – Alert status
+    if seizure_detected:
+        alert_text = "ALERT SENT"
+        alert_help = "Notification pushed to registered caretaker mobile app."
+    else:
+        alert_text = "MONITORING"
+        alert_help = "No abnormal event, no alert necessary."
+
+    col_c.metric("📱 Alert Status", alert_text, help=alert_help)
+
+    st.markdown("---")
 
     # ------------------------
     # Step 1: sEMG + RMS plots
@@ -175,10 +222,14 @@ def main():
     fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
     axes[0].plot(t, raw_signal)
     axes[0].set_title("Simulated sEMG Signal (Raw)")
+    axes[0].set_ylabel("Amplitude")
+
     axes[1].plot(t, smoothed, label="Before Drug")
     axes[1].plot(t, smoothed_treated, "--", label="After Drug Release")
     axes[1].set_title("Smoothed sEMG Signal (Before vs After Drug)")
+    axes[1].set_ylabel("Amplitude")
     axes[1].legend()
+
     axes[2].plot(t, rms, label="RMS (Before Drug)")
     axes[2].plot(t, rms_treated, "--", label="RMS (After Drug)")
     axes[2].axhline(y=threshold, linestyle="--", label="Threshold")
@@ -186,12 +237,17 @@ def main():
         axes[2].axvspan(t[det_start_idx], t[det_end_idx], alpha=0.3, label="Detected Seizure")
     axes[2].set_title("RMS & Seizure Detection")
     axes[2].set_xlabel("Time (s)")
+    axes[2].set_ylabel("RMS")
     axes[2].legend()
+
     plt.tight_layout()
     st.pyplot(fig)
 
     if seizure_detected:
-        st.success(f"Seizure detected between **{det_start_time:.2f} s** and **{det_end_time:.2f} s**. Drug release triggered.")
+        st.success(
+            f"Seizure detected between **{det_start_time:.2f} s** and "
+            f"**{det_end_time:.2f} s**. Drug release is triggered."
+        )
     else:
         st.info("No seizure detected at this threshold. Patch remains in monitoring mode.")
 
