@@ -128,7 +128,6 @@ def create_patch_3d(seizure_detected):
     else:
         n_particles = 10  # minimal background diffusion
 
-    # Start near patch (z ~ 0.2), move toward receptors (z ~ 3)
     xs = np.random.uniform(0.1, 1.9, n_particles)
     ys = np.random.uniform(0.1, 0.9, n_particles)
     if seizure_detected:
@@ -294,4 +293,88 @@ def main():
     )
 
     if seizure_detected:
-        det_start_time = t[det_start_]()
+        det_start_time = t[det_start_idx]
+        det_end_time = t[det_end_idx]
+    else:
+        det_start_time = det_end_time = None
+
+    # Apply drug effect (reduce amplitude in detected region)
+    treated_signal = apply_drug_effect(
+        raw_signal,
+        det_start_idx,
+        det_end_idx,
+        reduction_factor=0.35,
+    )
+    smoothed_treated = simple_smoothing(treated_signal, smooth_window)
+    rms_treated = compute_rms(smoothed_treated, rms_window)
+
+    # ------------------------
+    # Layout
+    # ------------------------
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        st.subheader("Step 1 – sEMG Monitoring & Threshold-based Seizure Detection")
+
+        fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+
+        # Raw signal
+        axes[0].plot(t, raw_signal)
+        axes[0].set_title("Simulated sEMG Signal (Raw)")
+        axes[0].set_ylabel("Amplitude")
+
+        # Smoothed signal (before/after drug)
+        axes[1].plot(t, smoothed, label="Before Drug")
+        axes[1].plot(t, smoothed_treated, linestyle="--", label="After Drug Release")
+        axes[1].set_title("Smoothed sEMG Signal (Before vs After Drug)")
+        axes[1].set_ylabel("Amplitude")
+        axes[1].legend()
+
+        # RMS & threshold (before vs after)
+        axes[2].plot(t, rms, label="RMS (Before Drug)")
+        axes[2].plot(t, rms_treated, linestyle="--", label="RMS (After Drug)")
+        axes[2].axhline(y=threshold, linestyle="--", label="Threshold")
+
+        if seizure_detected:
+            axes[2].axvspan(
+                t[det_start_idx],
+                t[det_end_idx],
+                alpha=0.3,
+                label="Detected Seizure",
+            )
+
+        axes[2].set_title("RMS & Seizure Detection")
+        axes[2].set_xlabel("Time (s)")
+        axes[2].set_ylabel("RMS")
+        axes[2].legend()
+
+        plt.tight_layout()
+        st.pyplot(fig)
+
+        if seizure_detected:
+            st.success(
+                f"Seizure detected between **{det_start_time:.2f} s** and "
+                f"**{det_end_time:.2f} s**. Drug release is triggered."
+            )
+        else:
+            st.info(
+                "No seizure detected at this threshold. Patch remains in monitoring mode."
+            )
+
+    with col2:
+        st.subheader("Step 2 – 3D Patch & Drug Release")
+
+        fig3d = create_patch_3d(seizure_detected)
+        st.plotly_chart(fig3d, use_container_width=True)
+
+        st.subheader("Step 3 – Caretaker Mobile Alert")
+
+        detection_info = {
+            "start_time": det_start_time if det_start_time is not None else 0.0,
+            "end_time": det_end_time if det_end_time is not None else 0.0,
+        }
+        caretaker_phone_ui(seizure_detected, detection_info)
+
+
+if __name__ == "__main__":
+    main()
