@@ -70,7 +70,7 @@ def detect_seizure(rms_signal, threshold, min_duration_samples):
     return False, None, None
 
 
-def apply_drug_effect(signal, idx_start, idx_end, reduction_factor=0.3):
+def apply_drug_effect(signal, idx_start, idx_end, reduction_factor=0.35):
     """
     Reduce the amplitude of the signal in the seizure region
     to simulate drug action.
@@ -163,22 +163,6 @@ def create_patch_3d(seizure_detected):
 # ------------------------
 # Caretaker phone UI block
 # ------------------------
-# Step 3 – Caretaker Alert
-st.subheader("Step 3 – Caretaker Mobile Alert")
-
-if seizure_detected:
-    st.success("📱 Alert sent to caretaker: Seizure detected! Drug released.")
-    st.markdown(
-        """
-        **Message Preview:**
-        > ⚠️ Seizure detected in patient *EP-001*.  
-        > Drug bolus delivered automatically.  
-        > Monitoring system active.
-        """,
-        unsafe_allow_html=True
-    )
-else:
-    st.info("📱 Monitoring active. No seizure detected.")
 
 def caretaker_phone_ui(seizure_detected, detection_info):
     """
@@ -304,7 +288,7 @@ def main():
 
     min_duration_samples = int(0.5 * fs)
 
-    # >>> seizure_detected is DEFINED HERE <<<
+    # Seizure detection
     seizure_detected, det_start_idx, det_end_idx = detect_seizure(
         rms, threshold, min_duration_samples
     )
