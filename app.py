@@ -2,39 +2,30 @@ import numpy as np
 import matplotlib.pyplot as plt
 import streamlit as st
 from matplotlib.patches import Rectangle, Polygon
+import datetime
+import time
 
 # ------------------------
 # Signal + detection logic
 # ------------------------
 
 def simulate_semg_with_seizure(duration_s=10, fs=1000):
-    """
-    Simulate a surface EMG signal in realistic microvolt range.
-    - Baseline: ~50 µV peak-to-peak
-    - Seizure burst: ~100–500 µV peak-to-peak
-    """
+    """Simulate surface EMG in realistic µV range."""
     t = np.linspace(0, duration_s, int(duration_s * fs))
 
-    # Start with a dimensionless "shape" signal
     base_shape = 0.5 * np.random.normal(0, 1, len(t)) + 0.25 * np.sin(2 * np.pi * 10 * t)
-
-    # Copy and add a seizure-like burst between t1 and t2
     seizure_shape = base_shape.copy()
-    t1, t2 = 6, 7  # seconds (can adjust with duration)
+    t1, t2 = 6, 7
     idx1, idx2 = int(t1 * fs), int(t2 * fs)
-
     seizure_shape[idx1:idx2] += 3.0 * np.random.normal(0, 1, idx2 - idx1)
 
-    # Scale to physical units (Volts)
-    # Baseline around 50 µV, seizure up to about 100–500 µV
-    baseline_scale = 50e-6   # 50 microvolts
-    seizure_scale = 300e-6   # typical burst amplitude in µV range
+    baseline_scale = 50e-6   # 50 µV
+    seizure_scale = 300e-6   # ~300 µV spikes
 
     signal = baseline_scale * base_shape
     signal[idx1:idx2] += seizure_scale * np.random.normal(0, 1, idx2 - idx1)
 
     return t, signal, (idx1, idx2)
-
 
 
 def simple_smoothing(signal, window_size):
@@ -70,85 +61,72 @@ def apply_drug_effect(signal, idx_start, idx_end, reduction_factor=0.35):
 
 
 # ------------------------
-# 2D Skin + Patch visualization
+# Skin + Patch visualization
 # ------------------------
 
 def create_skin_patch_figure(seizure_detected: bool):
-    """
-    Cross-section of skin with microneedle patch and dielectric drug-release membrane.
-    Blue block = drug reservoir under dielectric membrane.
-    Blue dots = released drug molecules (only when seizure is detected).
-    """
+    """Compact skin cross-section with dielectric drug-release membrane."""
     fig, ax = plt.subplots(figsize=(4.5, 2.5))
 
     ax.set_xlim(0, 10)
     ax.set_ylim(-0.5, 5.0)
 
-    # --- Skin layers ---
-    ax.add_patch(Rectangle((0, 0), 10, 1.0, color="#f9e07f"))   # hypodermis / fat
-    ax.add_patch(Rectangle((0, 1.0), 10, 1.8, color="#f7c0c9")) # dermis
-    ax.add_patch(Rectangle((0, 2.8), 10, 0.9, color="#fdd1b0")) # epidermis
-    ax.add_patch(Rectangle((0, 3.7), 10, 0.2, color="#fbe4cf")) # stratum corneum
+    # Skin layers
+    ax.add_patch(Rectangle((0, 0), 10, 1.0, color="#f9e07f"))
+    ax.add_patch(Rectangle((0, 1.0), 10, 1.8, color="#f7c0c9"))
+    ax.add_patch(Rectangle((0, 2.8), 10, 0.9, color="#fdd1b0"))
+    ax.add_patch(Rectangle((0, 3.7), 10, 0.2, color="#fbe4cf"))
 
-    # --- Patch base (orange, houses dielectric membrane + electronics) ---
+    # Patch base
     patch_x, patch_w, patch_y, patch_h = 1, 8, 4.1, 0.18
-    ax.add_patch(Rectangle((patch_x, patch_y), patch_w, patch_h,
-                           color="#f4a259", ec="black"))
+    ax.add_patch(Rectangle((patch_x, patch_y), patch_w, patch_h, color="#f4a259", ec="black"))
 
-    # --- Drug reservoir (under dielectric membrane) ---
-    if seizure_detected:
-        res_color, res_alpha = "#93c5fd", 0.8   # partially emptied
-    else:
-        res_color, res_alpha = "#1d4ed8", 0.95  # full reservoir
+    # Reservoir (blue)
+    res_color, res_alpha = ("#93c5fd", 0.8) if seizure_detected else ("#1d4ed8", 0.95)
+    ax.add_patch(Rectangle((patch_x, patch_y - 0.18), patch_w, 0.18, color=res_color, alpha=res_alpha, ec="black"))
 
-    res_h = 0.18
-    ax.add_patch(Rectangle((patch_x, patch_y - res_h), patch_w, res_h,
-                           color=res_color, alpha=res_alpha, ec="black"))
-
-    # --- Microneedles penetrating stratum corneum ---
+    # Needles
     for x in [2.2, 5.0, 7.8]:
         ax.add_patch(Polygon([
-            (x - 0.7/2, patch_y),
-            (x + 0.7/2, patch_y),
+            (x - 0.35, patch_y),
+            (x + 0.35, patch_y),
             (x, patch_y - 1.2)
         ], closed=True, color="#2f4b7c", ec="black"))
 
-    # --- Drug molecules (only when seizure detected) ---
+    # Drug molecules only when seizure
     if seizure_detected:
-        n, y_min, y_max = 60, 1.0, 3.1
-        xs = np.random.uniform(patch_x + 0.3, patch_x + patch_w - 0.3, n)
-        ys = np.random.uniform(y_min, y_max, n)
+        xs = np.random.uniform(patch_x + 0.3, patch_x + patch_w - 0.3, 60)
+        ys = np.random.uniform(1.0, 3.1, 60)
         ax.scatter(xs, ys, s=14, color="#3b82f6", alpha=0.85)
 
-    # --- Simple vessels / nerves in dermis ---
-    for offset in [2.0, 5.0, 8.0]:
-        x_line = np.linspace(offset - 1.0, offset + 1.0, 80)
-        y_line = 1.4 + 0.25 * np.sin(np.linspace(0, 4, 80))
-        ax.plot(x_line, y_line, color="#d14a61", linewidth=0.9, alpha=0.8)
-
-    # --- Labels / Annotations (dedicated space, not overlapping patch) ---
-    ax.text(0.4, 4.45, "Patch Base\n(Electronics + MCU)", fontsize=7.5,
-            color="#333", va="bottom")
-    ax.text(0.4, 4.05, "Dielectric Drug\nReservoir", fontsize=7.5,
-            color="#1d4ed8", va="bottom")
-    ax.text(0.4, 2.2, "Dermis\n(Nerves / Vessels)", fontsize=7.5,
-            color="#444", va="bottom")
+    # Labels
+    ax.text(0.4, 4.45, "Patch Base\n(MCU + Membrane)", fontsize=7.5, color="#333", va="bottom")
+    ax.text(0.4, 4.05, "Drug Reservoir", fontsize=7.5, color="#1d4ed8", va="bottom")
+    ax.text(0.4, 2.2, "Dermis\n(Nerves / Vessels)", fontsize=7.5, color="#444", va="bottom")
     ax.text(0.4, 0.4, "Fat Layer", fontsize=7.5, color="#444", va="bottom")
+    ax.text(5, -0.25, "🔵 Drug molecules released only when seizure is detected", fontsize=7, color="#3b82f6", ha="center")
 
-    # Legend-style explanation below the drawing
-    ax.text(5, -0.25,
-            "🔵 Drug molecules released only when seizure is detected\n"
-            "   (dielectric membrane activated by MCU)",
-            fontsize=7, color="#3b82f6", ha="center", va="top")
-
-    # Hide axes
     ax.set_xticks([])
     ax.set_yticks([])
-
-    ax.set_title("Smart Microneedle Patch with Dielectric Drug-Release Membrane",
-                 fontsize=10, pad=6)
+    ax.set_title("Smart Microneedle Patch (Cross-section)", fontsize=10)
     plt.tight_layout()
     return fig
+
+
+# ------------------------
+# IoT Live Log Generator
+# ------------------------
+
+def generate_iot_log(seizure_detected):
+    """Simulate real-time IoT telemetry from MCU."""
+    log_entries = []
+    now = datetime.datetime.now()
+    for i in range(10):
+        timestamp = (now + datetime.timedelta(seconds=i)).strftime("%H:%M:%S")
+        voltage = np.random.uniform(45, 60) if not seizure_detected else np.random.uniform(120, 450)
+        status = "Normal" if voltage < 100 else "Seizure Spike"
+        log_entries.append(f"{timestamp} | {voltage:6.1f} µV | {status}")
+    return "\n".join(log_entries)
 
 
 # ------------------------
@@ -160,20 +138,20 @@ def caretaker_phone_ui(seizure_detected, detection_info):
         title = "⚠️ Epileptic Seizure Detected"
         body = (
             f"Patient ID: EP-001\n"
-            f"Event time: {detection_info['start_time']:.2f}–{detection_info['end_time']:.2f} s\n"
-            f"sEMG-based algorithm on MCU confirmed seizure.\n"
-            f"Dielectric membrane activated – emergency bolus delivered.\n"
-            f"IoT: Event + sEMG snapshot uploaded to cloud.\n"
-            f"Please check the patient immediately."
+            f"Event: {detection_info['start_time']:.2f}–{detection_info['end_time']:.2f} s\n"
+            f"sEMG spike detected (100–500 µV range).\n"
+            f"MCU activated dielectric membrane → drug release.\n"
+            f"IoT uploaded data to cloud.\n"
+            f"Immediate caretaker attention required."
         )
         color, border = "#ffcccc", "#ff4444"
     else:
         title = "✅ Monitoring Normal"
         body = (
             "Patient ID: EP-001\n"
-            "No seizure activity detected from surface EMG.\n"
-            "Patch delivering baseline dose only.\n"
-            "IoT node logging electrical activity in background."
+            "Surface EMG stable (~50 µV baseline).\n"
+            "No seizure detected.\n"
+            "MCU logging data, membrane inactive."
         )
         color, border = "#ccffdd", "#22aa66"
 
@@ -199,180 +177,88 @@ def caretaker_phone_ui(seizure_detected, detection_info):
 
 def main():
     st.set_page_config(page_title="Smart Microneedle Patch for Epilepsy", layout="wide")
-    st.title("Smart Microneedle Patch for Epilepsy – Interactive Demo")
+    st.title("Smart Microneedle Patch for Epilepsy – Integrated IoT Demo")
 
-    # ------------------------
-    # System overview (sEMG + MCU/IoT + Dielectric Membrane)
-    # ------------------------
-    st.markdown("### System Overview")
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-        st.markdown(
-            "**1. sEMG Sensing Layer**  \n"
-            "- Surface EMG electrodes capture muscle/electrical activity.  \n"
-            "- Signals are filtered and converted to RMS envelope.  \n"
-            "- Used as the primary biomarker for imminent seizure."
-        )
-
-    with c2:
-        st.markdown(
-            "**2. Microcontroller + IoT Node**  \n"
-            "- Runs lightweight seizure-detection algorithm on sEMG.  \n"
-            "- Stores electrical activity and events on local memory/cloud.  \n"
-            "- Sends trigger signal to the patch and pushes alerts to mobile."
-        )
-
-    with c3:
-        st.markdown(
-            "**3. Dielectric Drug-Release Membrane**  \n"
-            "- Integrates with a microneedle patch + drug reservoir.  \n"
-            "- When activated by MCU, electric field changes membrane properties.  \n"
-            "- This opens diffusion pathways and releases anti-epileptic drug."
-        )
-
-    st.write(
-        "Use the controls on the left to change signal duration and detection "
-        "threshold. When a seizure is detected from sEMG, the MCU/IoT block "
-        "activates the dielectric membrane, increases drug release, and sends a "
-        "mobile alert to the caretaker."
+    # Hardware system diagram (static)
+    st.image(
+        "https://raw.githubusercontent.com/yeshwanthya/smart-patch-hardware-diagram/main/system_diagram.png",
+        caption="System overview: sEMG electrodes → MCU/IoT → Dielectric Patch → Caretaker Alert",
+        use_column_width=True
     )
 
-    # Sidebar controls
+    st.markdown(
+        "This system uses **surface EMG sensors** to detect electrical activity (50–500 µV). "
+        "A **microcontroller with IoT** connectivity processes the data and, if seizure activity "
+        "is detected, triggers a **dielectric membrane** in the microneedle patch to release "
+        "drug molecules and simultaneously sends an alert to the caretaker’s mobile device."
+    )
+
+    # Sidebar
     st.sidebar.header("Control Panel")
-    seed = st.sidebar.number_input("Random seed for signal", 0, 9999, 42, 1)
+    seed = st.sidebar.number_input("Random seed", 0, 9999, 42, 1)
     np.random.seed(seed)
     duration_s = st.sidebar.slider("Signal duration (seconds)", 5, 20, 10)
     fs = 1000
 
-    # Signal generation & processing
+    # Simulate signal
     t, raw_signal, (sz_start, sz_end) = simulate_semg_with_seizure(duration_s, fs)
     smoothed = simple_smoothing(raw_signal, int(0.01 * fs))
     rms = compute_rms(smoothed, int(0.1 * fs))
 
-    # Threshold control
     base_threshold = np.mean(rms) + 2 * np.std(rms)
-    st.sidebar.subheader("Seizure Detection Threshold")
-    threshold_factor = st.sidebar.slider(
-        "Threshold level (relative to baseline)", 0.5, 2.0, 1.0, 0.05
-    )
+    threshold_factor = st.sidebar.slider("Detection threshold multiplier", 0.5, 2.0, 1.0, 0.05)
     threshold = base_threshold * threshold_factor
 
-    # Seizure detection
-    seizure_detected, det_start_idx, det_end_idx = detect_seizure(
-        rms, threshold, int(0.5 * fs)
-    )
+    seizure_detected, det_start_idx, det_end_idx = detect_seizure(rms, threshold, int(0.5 * fs))
     det_start_time = t[det_start_idx] if seizure_detected else 0.0
     det_end_time = t[det_end_idx] if seizure_detected else 0.0
 
-    # Drug effect on signal
     treated_signal = apply_drug_effect(raw_signal, det_start_idx, det_end_idx)
     smoothed_treated = simple_smoothing(treated_signal, int(0.01 * fs))
     rms_treated = compute_rms(smoothed_treated, int(0.1 * fs))
 
-    # ------------------------
-    # Top status dashboard (now with MCU/IoT status)
-    # ------------------------
-    st.markdown("### Live Patch + IoT Status Dashboard")
-
-    col_a, col_b, col_c, col_d = st.columns(4)
-
-    if seizure_detected:
-        seizure_text = "DETECTED"
-        seizure_help = f"Seizure detected between {det_start_time:.2f}s and {det_end_time:.2f}s from sEMG."
-    else:
-        seizure_text = "NORMAL"
-        seizure_help = "sEMG RMS did not cross threshold for the minimum duration."
-    col_a.metric("🧠 Seizure Status (sEMG)", seizure_text, help=seizure_help)
-
-    if seizure_detected:
-        drug_text = "EMERGENCY BOLUS"
-        drug_help = "Dielectric membrane activated; drug bolus delivered."
-    else:
-        drug_text = "BASELINE"
-        drug_help = "Membrane closed; only basal diffusion from patch."
-    col_b.metric("💊 Drug Delivery Mode", drug_text, help=drug_help)
-
-    if seizure_detected:
-        alert_text = "ALERT SENT"
-        alert_help = "IoT node pushed event + notification to caretaker mobile."
-    else:
-        alert_text = "MONITORING"
-        alert_help = "No abnormal event; system quietly logging data."
-    col_c.metric("📱 Caretaker Alert", alert_text, help=alert_help)
-
-    if seizure_detected:
-        mcu_text = "TRIGGERING PATCH"
-        mcu_help = "MCU drives dielectric membrane + uploads seizure data."
-    else:
-        mcu_text = "MONITORING"
-        mcu_help = "MCU sampling sEMG & streaming logs to storage."
-    col_d.metric("🧾 MCU / IoT Status", mcu_text, help=mcu_help)
+    # Dashboard
+    st.markdown("### Live System Status")
+    cols = st.columns(4)
+    cols[0].metric("🧠 Seizure Status", "Detected" if seizure_detected else "Normal")
+    cols[1].metric("💊 Drug Delivery", "Active" if seizure_detected else "Baseline")
+    cols[2].metric("📡 IoT Upload", "In Progress" if seizure_detected else "Logging")
+    cols[3].metric("⚙️ MCU Status", "Triggering Patch" if seizure_detected else "Monitoring")
 
     st.markdown("---")
 
-    # ------------------------
-    # Step 1 – sEMG monitoring & detection
-    # ------------------------
-    st.subheader("Step 1 – Surface EMG (sEMG) Monitoring & Threshold-based Seizure Detection")
-
+    # Step 1 – sEMG
+    st.subheader("Step 1 – Surface EMG (sEMG) Monitoring")
     fig, axes = plt.subplots(3, 1, figsize=(8, 5.5), sharex=True)
-    axes[0].plot(t, raw_signal)
-    axes[0].set_title("Simulated sEMG Signal (Raw)")
-    axes[0].set_ylabel("Amplitude")
-
-    axes[1].plot(t, smoothed, label="Before Drug")
-    axes[1].plot(t, smoothed_treated, "--", label="After Drug Release")
-    axes[1].set_title("Smoothed sEMG Signal (Before vs After Drug)")
-    axes[1].set_ylabel("Amplitude")
+    axes[0].plot(t, raw_signal * 1e6)
+    axes[0].set_title("Surface EMG Signal")
+    axes[0].set_ylabel("Amplitude (µV)")
+    axes[1].plot(t, smoothed * 1e6, label="Before Drug")
+    axes[1].plot(t, smoothed_treated * 1e6, "--", label="After Drug Release")
     axes[1].legend()
-
-    axes[2].plot(t, rms, label="RMS (Before Drug)")
-    axes[2].plot(t, rms_treated, "--", label="RMS (After Drug)")
-    axes[2].axhline(y=threshold, linestyle="--", label="Detection Threshold")
-    if seizure_detected:
-        axes[2].axvspan(t[det_start_idx], t[det_end_idx], alpha=0.3, label="Detected Seizure")
-    axes[2].set_title("RMS Envelope & Seizure Decision Logic")
-    axes[2].set_xlabel("Time (s)")
-    axes[2].set_ylabel("RMS")
+    axes[1].set_ylabel("Amplitude (µV)")
+    axes[2].plot(t, rms * 1e6, label="RMS (Before Drug)")
+    axes[2].plot(t, rms_treated * 1e6, "--", label="RMS (After Drug)")
+    axes[2].axhline(y=threshold * 1e6, linestyle="--", label="Threshold")
     axes[2].legend()
-
+    axes[2].set_xlabel("Time (s)")
+    axes[2].set_ylabel("RMS (µV)")
     plt.tight_layout()
-    plt.subplots_adjust(hspace=0.4)
     st.pyplot(fig)
 
-    if seizure_detected:
-        st.success(
-            f"sEMG-based algorithm detected a seizure between "
-            f"**{det_start_time:.2f} s** and **{det_end_time:.2f} s**.\n\n"
-            "The microcontroller activates the dielectric membrane, "
-            "releasing drug and triggering an IoT alert."
-        )
-    else:
-        st.info(
-            "No seizure detected at this threshold. The microcontroller keeps the "
-            "dielectric membrane closed and the patch remains in monitoring mode."
-        )
+    # Step 2 + 3 – Patch + Mobile
+    st.subheader("Step 2 – Patch Drug Release and IoT Alert")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.pyplot(create_skin_patch_figure(seizure_detected))
+    with col2:
+        caretaker_phone_ui(seizure_detected, {"start_time": det_start_time, "end_time": det_end_time})
 
-    # ------------------------
-    # Step 2 & 3 – Patch + Mobile Alert side by side
-    # ------------------------
-    st.subheader("Step 2 – Dielectric Membrane-Controlled Drug Release in the Microneedle Patch")
-    st.caption("Reservoir (blue block) stores drug; droplets appear only when the MCU triggers release during seizure.")
-
-    col_left, col_right = st.columns([1, 1])
-
-    with col_left:
-        skin_fig = create_skin_patch_figure(seizure_detected)
-        st.pyplot(skin_fig)
-
-    with col_right:
-        st.subheader("Step 3 – IoT-Connected Caretaker Mobile Alert")
-        detection_info = {"start_time": det_start_time, "end_time": det_end_time}
-        caretaker_phone_ui(seizure_detected, detection_info)
+    # Step 4 – Live IoT Log Panel
+    st.subheader("Step 4 – Live IoT Telemetry Log")
+    st.caption("Simulated data stream from MCU/IoT node showing surface EMG readings in microvolts.")
+    st.text(generate_iot_log(seizure_detected))
 
 
 if __name__ == "__main__":
     main()
-
