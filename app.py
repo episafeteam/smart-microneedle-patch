@@ -8,13 +8,33 @@ from matplotlib.patches import Rectangle, Polygon
 # ------------------------
 
 def simulate_semg_with_seizure(duration_s=10, fs=1000):
+    """
+    Simulate a surface EMG signal in realistic microvolt range.
+    - Baseline: ~50 µV peak-to-peak
+    - Seizure burst: ~100–500 µV peak-to-peak
+    """
     t = np.linspace(0, duration_s, int(duration_s * fs))
-    base = 0.2 * np.random.normal(0, 1, len(t)) + 0.1 * np.sin(2 * np.pi * 10 * t)
-    seizure_signal = base.copy()
-    t1, t2 = 6, 7
+
+    # Start with a dimensionless "shape" signal
+    base_shape = 0.5 * np.random.normal(0, 1, len(t)) + 0.25 * np.sin(2 * np.pi * 10 * t)
+
+    # Copy and add a seizure-like burst between t1 and t2
+    seizure_shape = base_shape.copy()
+    t1, t2 = 6, 7  # seconds (can adjust with duration)
     idx1, idx2 = int(t1 * fs), int(t2 * fs)
-    seizure_signal[idx1:idx2] += 1.5 * np.random.normal(0, 1, idx2 - idx1)
-    return t, seizure_signal, (idx1, idx2)
+
+    seizure_shape[idx1:idx2] += 3.0 * np.random.normal(0, 1, idx2 - idx1)
+
+    # Scale to physical units (Volts)
+    # Baseline around 50 µV, seizure up to about 100–500 µV
+    baseline_scale = 50e-6   # 50 microvolts
+    seizure_scale = 300e-6   # typical burst amplitude in µV range
+
+    signal = baseline_scale * base_shape
+    signal[idx1:idx2] += seizure_scale * np.random.normal(0, 1, idx2 - idx1)
+
+    return t, signal, (idx1, idx2)
+
 
 
 def simple_smoothing(signal, window_size):
@@ -355,3 +375,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
