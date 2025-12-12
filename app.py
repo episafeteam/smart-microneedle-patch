@@ -55,111 +55,71 @@ def apply_drug_effect(signal, idx_start, idx_end, reduction_factor=0.35):
 
 def create_skin_patch_figure(seizure_detected: bool):
     """
-    Draw a 2D cross-section of skin with a microneedle patch.
-    Blue block = drug reservoir inside the patch.
-    Blue dots = drug molecules diffusing into skin.
+    Compact skin cross-section with microneedle patch and drug reservoir.
+    Blue block = drug reservoir.
+    Blue dots = released drug molecules.
     When seizure_detected = True -> reservoir looks partially emptied
-    and many dots go deeper into the dermis.
+    and more dots go deeper into the dermis.
     """
-    # Smaller figure size so it doesn't dominate the page
-    fig, ax = plt.subplots(figsize=(5, 3))
+    # Smaller figure
+    fig, ax = plt.subplots(figsize=(4, 2.3))
 
-    # Coordinate system
     ax.set_xlim(0, 10)
     ax.set_ylim(0, 4.6)
 
-    # --- Skin layers (from bottom up) ---
-
-    # Hypodermis / fat
-    ax.add_patch(Rectangle((0, 0), 10, 1.0, color="#f9e07f"))  # yellow
-    # Dermis
-    ax.add_patch(Rectangle((0, 1.0), 10, 1.8, color="#f7c0c9"))  # pink
-    # Epidermis
-    ax.add_patch(Rectangle((0, 2.8), 10, 0.9, color="#fdd1b0"))  # light peach
-    # Stratum corneum surface
-    ax.add_patch(Rectangle((0, 3.7), 10, 0.2, color="#fbe4cf"))
+    # --- Skin layers ---
+    ax.add_patch(Rectangle((0, 0), 10, 1.0, color="#f9e07f"))   # fat
+    ax.add_patch(Rectangle((0, 1.0), 10, 1.8, color="#f7c0c9")) # dermis
+    ax.add_patch(Rectangle((0, 2.8), 10, 0.9, color="#fdd1b0")) # epidermis
+    ax.add_patch(Rectangle((0, 3.7), 10, 0.2, color="#fbe4cf")) # stratum
 
     # --- Patch base (orange) ---
+    patch_x, patch_w, patch_y, patch_h = 1, 8, 4.1, 0.18
+    ax.add_patch(Rectangle((patch_x, patch_y), patch_w, patch_h,
+                           color="#f4a259", ec="black"))
 
-    patch_x = 1
-    patch_width = 8
-    patch_top_y = 4.1
-    patch_height = 0.22
-    ax.add_patch(
-        Rectangle(
-            (patch_x, patch_top_y),
-            patch_width,
-            patch_height,
-            color="#f4a259",
-            ec="black",
-        )
-    )
-
-    # --- Drug reservoir (blue block) under base, above needles ---
-
-    # Full + dark when no seizure; lighter (as if emptied) when seizure
+    # --- Reservoir (blue block) ---
     if seizure_detected:
-        reservoir_color = "#93c5fd"   # lighter blue (partially emptied)
-        reservoir_alpha = 0.8
+        res_color, res_alpha = "#93c5fd", 0.8   # lighter, partially emptied
     else:
-        reservoir_color = "#1d4ed8"   # darker blue (full)
-        reservoir_alpha = 0.95
+        res_color, res_alpha = "#1d4ed8", 0.95  # darker, full reservoir
 
-    reservoir_height = 0.20
-    reservoir_bottom_y = patch_top_y - reservoir_height
-    ax.add_patch(
-        Rectangle(
-            (patch_x, reservoir_bottom_y),
-            patch_width,
-            reservoir_height,
-            color=reservoir_color,
-            alpha=reservoir_alpha,
-            ec="black",
-        )
-    )
+    res_h = 0.18
+    ax.add_patch(Rectangle((patch_x, patch_y - res_h), patch_w, res_h,
+                           color=res_color, alpha=res_alpha, ec="black"))
 
-    # --- Microneedles (triangles) ---
+    # --- Needles ---
+    for x in [2.2, 5.0, 7.8]:
+        ax.add_patch(Polygon([
+            (x - 0.7/2, patch_y),
+            (x + 0.7/2, patch_y),
+            (x, patch_y - 1.2)
+        ], closed=True, color="#2f4b7c", ec="black"))
 
-    needle_positions = [2.2, 5.0, 7.8]
-    for x_center in needle_positions:
-        width = 0.8
-        height = 1.4
-        top_y = patch_top_y
-        points = [
-            (x_center - width / 2, top_y),
-            (x_center + width / 2, top_y),
-            (x_center, top_y - height),
-        ]
-        ax.add_patch(Polygon(points, closed=True, color="#2f4b7c", ec="black"))
-
-    # --- Drug molecules (blue dots) ---
-
+    # --- Drug molecules ---
     if seizure_detected:
-        # Many droplets, going deeper into dermis
-        n_dots = 80
-        y_min, y_max = 1.0, 3.2   # dermis + lower epidermis
+        n, y_min, y_max = 60, 1.0, 3.1   # deeper + more
     else:
-        # Very few droplets, staying close to surface (maintenance)
-        n_dots = 12
-        y_min, y_max = 3.1, 3.7   # upper epidermis only
+        n, y_min, y_max = 8, 3.0, 3.7    # few, near surface
 
-    xs = np.random.uniform(patch_x + 0.3, patch_x + patch_width - 0.3, n_dots)
-    ys = np.random.uniform(y_min, y_max, n_dots)
-    ax.scatter(xs, ys, s=18, color="#3b82f6", alpha=0.85, label="Drug molecules")
+    xs = np.random.uniform(patch_x + 0.3, patch_x + patch_w - 0.3, n)
+    ys = np.random.uniform(y_min, y_max, n)
+    ax.scatter(xs, ys, s=14, color="#3b82f6", alpha=0.85, label="Drug molecules")
 
-    # --- Simple nerve / vessel hints in dermis ---
-
+    # --- Simple vessels in dermis ---
     for offset in [2.0, 5.0, 8.0]:
-        x_line = np.linspace(offset - 1.2, offset + 1.2, 100)
-        y_line = 1.5 + 0.25 * np.sin(np.linspace(0, 4, 100))
-        ax.plot(x_line, y_line, color="#d14a61", linewidth=1.1, alpha=0.8)
+        x_line = np.linspace(offset - 1.0, offset + 1.0, 80)
+        y_line = 1.4 + 0.25 * np.sin(np.linspace(0, 4, 80))
+        ax.plot(x_line, y_line, color="#d14a61", linewidth=0.9, alpha=0.8)
 
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.set_title("Cross-section of Skin with Smart Microneedle Patch")
-    ax.legend(loc="upper right")
+    ax.set_title("Smart Microneedle Patch (Cross-section)", fontsize=11)
+    ax.legend(loc="upper right", fontsize=8)
+    plt.tight_layout()
 
     return fig
+
 
 # ------------------------
 # Caretaker phone UI
@@ -187,16 +147,16 @@ def caretaker_phone_ui(seizure_detected, detection_info):
         color, border = "#ccffdd", "#22aa66"
 
     phone_html = f"""
-    <div style="width:260px;height:480px;border-radius:30px;border:4px solid #333;
-                padding:15px;background:linear-gradient(180deg,#111,#222);
+    <div style="width:230px;height:420px;border-radius:30px;border:4px solid #333;
+                padding:12px;background:linear-gradient(180deg,#111,#222);
                 display:flex;flex-direction:column;align-items:center;color:#f5f5f5;">
-        <div style="width:40%;height:8px;border-radius:10px;background:#555;margin-bottom:15px;"></div>
-        <div style="width:100%;flex:1;border-radius:20px;padding:15px;background:{color};
+        <div style="width:40%;height:8px;border-radius:10px;background:#555;margin-bottom:12px;"></div>
+        <div style="width:100%;flex:1;border-radius:20px;padding:12px;background:{color};
                     color:#000;border:2px solid {border};overflow-y:auto;">
-            <h4 style="margin-top:0;margin-bottom:10px;font-size:16px;">{title}</h4>
-            <pre style="white-space:pre-wrap;font-size:13px;font-family:'Courier New',monospace;">{body}</pre>
+            <h4 style="margin-top:0;margin-bottom:8px;font-size:14px;">{title}</h4>
+            <pre style="white-space:pre-wrap;font-size:11px;font-family:'Courier New',monospace;">{body}</pre>
         </div>
-        <div style="width:40px;height:40px;border-radius:50%;background:#444;margin-top:12px;"></div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#444;margin-top:10px;"></div>
     </div>
     """
     st.markdown(phone_html, unsafe_allow_html=True)
@@ -282,11 +242,11 @@ def main():
     st.markdown("---")
 
     # ------------------------
-    # Step 1: sEMG + RMS plots
+    # Step 1 – sEMG + RMS plots
     # ------------------------
     st.subheader("Step 1 – sEMG Monitoring & Threshold-based Seizure Detection")
 
-    fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=(8, 5.5), sharex=True)  # smaller size
     axes[0].plot(t, raw_signal)
     axes[0].set_title("Simulated sEMG Signal (Raw)")
     axes[0].set_ylabel("Amplitude")
@@ -308,6 +268,7 @@ def main():
     axes[2].legend()
 
     plt.tight_layout()
+    plt.subplots_adjust(hspace=0.4)
     st.pyplot(fig)
 
     if seizure_detected:
@@ -319,21 +280,22 @@ def main():
         st.info("No seizure detected at this threshold. Patch remains in monitoring mode.")
 
     # ------------------------
-    # Step 2: Skin + Patch cartoon
+    # Step 2 – Patch + Step 3 – Mobile Alert side by side
     # ------------------------
     st.subheader("Step 2 – Drug Release into Skin via Smart Microneedle Patch")
-    st.caption("Blue droplets represent drug molecules diffusing into skin layers.")
-    skin_fig = create_skin_patch_figure(seizure_detected)
-    st.pyplot(skin_fig)
+    st.caption("Reservoir (blue block) stores drug; droplets show release into skin layers.")
 
-    # ------------------------
-    # Step 3: Caretaker Mobile Alert
-    # ------------------------
-    st.subheader("Step 3 – Caretaker Mobile Alert")
-    detection_info = {"start_time": det_start_time, "end_time": det_end_time}
-    caretaker_phone_ui(seizure_detected, detection_info)
+    col_left, col_right = st.columns([1, 1])
+
+    with col_left:
+        skin_fig = create_skin_patch_figure(seizure_detected)
+        st.pyplot(skin_fig)
+
+    with col_right:
+        st.subheader("Step 3 – Caretaker Mobile Alert")
+        detection_info = {"start_time": det_start_time, "end_time": det_end_time}
+        caretaker_phone_ui(seizure_detected, detection_info)
 
 
 if __name__ == "__main__":
     main()
-
