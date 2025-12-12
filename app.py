@@ -56,34 +56,75 @@ def apply_drug_effect(signal, idx_start, idx_end, reduction_factor=0.35):
 def create_skin_patch_figure(seizure_detected: bool):
     """
     Draw a 2D cross-section of skin with a microneedle patch.
-    Blue dots represent drug molecules diffusing into skin.
-    When seizure_detected = True -> more, deeper dots.
+    Blue block = drug reservoir inside the patch.
+    Blue dots = drug molecules diffusing into skin.
+    When seizure_detected = True -> reservoir looks partially emptied
+    and many dots go deeper into the dermis.
     """
-    fig, ax = plt.subplots(figsize=(6, 4))
+    # Smaller figure size so it doesn't dominate the page
+    fig, ax = plt.subplots(figsize=(5, 3))
 
     # Coordinate system
     ax.set_xlim(0, 10)
-    ax.set_ylim(0, 5)
+    ax.set_ylim(0, 4.6)
 
-    # Skin layers (from bottom up)
+    # --- Skin layers (from bottom up) ---
+
     # Hypodermis / fat
-    ax.add_patch(Rectangle((0, 0), 10, 1.2, color="#f9e07f"))  # yellow
+    ax.add_patch(Rectangle((0, 0), 10, 1.0, color="#f9e07f"))  # yellow
     # Dermis
-    ax.add_patch(Rectangle((0, 1.2), 10, 2.0, color="#f7c0c9"))  # pink
+    ax.add_patch(Rectangle((0, 1.0), 10, 1.8, color="#f7c0c9"))  # pink
     # Epidermis
-    ax.add_patch(Rectangle((0, 3.2), 10, 0.9, color="#fdd1b0"))  # light peach
+    ax.add_patch(Rectangle((0, 2.8), 10, 0.9, color="#fdd1b0"))  # light peach
     # Stratum corneum surface
-    ax.add_patch(Rectangle((0, 4.1), 10, 0.2, color="#fbe4cf"))
+    ax.add_patch(Rectangle((0, 3.7), 10, 0.2, color="#fbe4cf"))
 
-    # Microneedle patch base (above skin)
-    ax.add_patch(Rectangle((1, 4.5), 8, 0.25, color="#f4a259", ec="black"))
+    # --- Patch base (orange) ---
 
-    # Microneedles (triangles)
-    needle_positions = [2, 4.5, 7]
+    patch_x = 1
+    patch_width = 8
+    patch_top_y = 4.1
+    patch_height = 0.22
+    ax.add_patch(
+        Rectangle(
+            (patch_x, patch_top_y),
+            patch_width,
+            patch_height,
+            color="#f4a259",
+            ec="black",
+        )
+    )
+
+    # --- Drug reservoir (blue block) under base, above needles ---
+
+    # Full + dark when no seizure; lighter (as if emptied) when seizure
+    if seizure_detected:
+        reservoir_color = "#93c5fd"   # lighter blue (partially emptied)
+        reservoir_alpha = 0.8
+    else:
+        reservoir_color = "#1d4ed8"   # darker blue (full)
+        reservoir_alpha = 0.95
+
+    reservoir_height = 0.20
+    reservoir_bottom_y = patch_top_y - reservoir_height
+    ax.add_patch(
+        Rectangle(
+            (patch_x, reservoir_bottom_y),
+            patch_width,
+            reservoir_height,
+            color=reservoir_color,
+            alpha=reservoir_alpha,
+            ec="black",
+        )
+    )
+
+    # --- Microneedles (triangles) ---
+
+    needle_positions = [2.2, 5.0, 7.8]
     for x_center in needle_positions:
         width = 0.8
-        height = 1.3
-        top_y = 4.5
+        height = 1.4
+        top_y = patch_top_y
         points = [
             (x_center - width / 2, top_y),
             (x_center + width / 2, top_y),
@@ -91,25 +132,27 @@ def create_skin_patch_figure(seizure_detected: bool):
         ]
         ax.add_patch(Polygon(points, closed=True, color="#2f4b7c", ec="black"))
 
-    # Drug molecules (blue dots)
+    # --- Drug molecules (blue dots) ---
+
     if seizure_detected:
+        # Many droplets, going deeper into dermis
         n_dots = 80
-        # Spread deeper into dermis
-        y_min, y_max = 1.0, 3.3
+        y_min, y_max = 1.0, 3.2   # dermis + lower epidermis
     else:
-        n_dots = 20
-        # Mostly near top epidermis
-        y_min, y_max = 3.0, 4.0
+        # Very few droplets, staying close to surface (maintenance)
+        n_dots = 12
+        y_min, y_max = 3.1, 3.7   # upper epidermis only
 
-    xs = np.random.uniform(1.3, 8.7, n_dots)
+    xs = np.random.uniform(patch_x + 0.3, patch_x + patch_width - 0.3, n_dots)
     ys = np.random.uniform(y_min, y_max, n_dots)
-    ax.scatter(xs, ys, s=20, color="#3b82f6", alpha=0.8, label="Drug molecules")
+    ax.scatter(xs, ys, s=18, color="#3b82f6", alpha=0.85, label="Drug molecules")
 
-    # Nerve / vessel hints (simple squiggles in dermis)
+    # --- Simple nerve / vessel hints in dermis ---
+
     for offset in [2.0, 5.0, 8.0]:
-        y_line = 1.8 + 0.3 * np.sin(np.linspace(0, 4, 100))
         x_line = np.linspace(offset - 1.2, offset + 1.2, 100)
-        ax.plot(x_line, y_line, color="#d14a61", linewidth=1.2, alpha=0.8)
+        y_line = 1.5 + 0.25 * np.sin(np.linspace(0, 4, 100))
+        ax.plot(x_line, y_line, color="#d14a61", linewidth=1.1, alpha=0.8)
 
     ax.set_xticks([])
     ax.set_yticks([])
@@ -117,7 +160,6 @@ def create_skin_patch_figure(seizure_detected: bool):
     ax.legend(loc="upper right")
 
     return fig
-
 
 # ------------------------
 # Caretaker phone UI
@@ -294,3 +336,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
