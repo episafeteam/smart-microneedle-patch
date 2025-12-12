@@ -1,8 +1,7 @@
-import time
 import numpy as np
 import matplotlib.pyplot as plt
 import streamlit as st
-import plotly.graph_objects as go
+from matplotlib.patches import Rectangle, Polygon
 
 # ------------------------
 # Signal + detection logic
@@ -51,89 +50,73 @@ def apply_drug_effect(signal, idx_start, idx_end, reduction_factor=0.35):
 
 
 # ------------------------
-# 3D Patch helper
+# 2D Skin + Patch visualization
 # ------------------------
 
-def build_patch_figure(xs, ys, zs, seizure_detected):
-    fig = go.Figure()
-
-    # Patch: rectangle at z=0
-    patch_x = [0, 2, 2, 0, 0]
-    patch_y = [0, 0, 1, 1, 0]
-    patch_z = [0, 0, 0, 0, 0]
-    fig.add_trace(go.Scatter3d(x=patch_x, y=patch_y, z=patch_z,
-                               mode="lines", name="Microneedle Patch"))
-
-    # Receptor layer at z=3
-    rec_x = [0, 2, 2, 0, 0]
-    rec_y = [0, 0, 1, 1, 0]
-    rec_z = [3, 3, 3, 3, 3]
-    fig.add_trace(go.Scatter3d(x=rec_x, y=rec_y, z=rec_z,
-                               mode="lines", name="Receptor Layer"))
-
-    # Drug particles
-    fig.add_trace(go.Scatter3d(
-        x=xs,
-        y=ys,
-        z=zs,
-        mode="markers",
-        name="Drug Molecules",
-        marker=dict(size=3)
-    ))
-
-    fig.update_layout(
-        scene=dict(
-            xaxis_title="Patch Length",
-            yaxis_title="Patch Width",
-            zaxis_title="Depth (towards receptors)",
-            aspectratio=dict(x=2, y=1, z=1.5),
-        ),
-        margin=dict(l=0, r=0, b=0, t=30),
-        title="3D Smart Microneedle Patch – Drug Release",
-    )
-    return fig
-
-
-def create_patch_static(seizure_detected):
-    n_particles = 80 if seizure_detected else 10
-    xs = np.random.uniform(0.1, 1.9, n_particles)
-    ys = np.random.uniform(0.1, 0.9, n_particles)
-    zs = np.random.uniform(0.3, 2.8 if seizure_detected else 0.8, n_particles)
-    return build_patch_figure(xs, ys, zs, seizure_detected)
-
-
-def animate_patch(seizure_detected):
+def create_skin_patch_figure(seizure_detected: bool):
     """
-    Simple time-lapse animation of drug moving
-    from patch surface (z≈0) towards receptors (z≈3).
+    Draw a 2D cross-section of skin with a microneedle patch.
+    Blue dots represent drug molecules diffusing into skin.
+    When seizure_detected = True -> more, deeper dots.
     """
-    n_particles = 80 if seizure_detected else 20
+    fig, ax = plt.subplots(figsize=(6, 4))
 
-    xs = np.random.uniform(0.1, 1.9, n_particles)
-    ys = np.random.uniform(0.1, 0.9, n_particles)
+    # Coordinate system
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 5)
 
-    # Start near patch surface
-    z_start = np.random.uniform(0.2, 0.6, n_particles)
+    # Skin layers (from bottom up)
+    # Hypodermis / fat
+    ax.add_patch(Rectangle((0, 0), 10, 1.2, color="#f9e07f"))  # yellow
+    # Dermis
+    ax.add_patch(Rectangle((0, 1.2), 10, 2.0, color="#f7c0c9"))  # pink
+    # Epidermis
+    ax.add_patch(Rectangle((0, 3.2), 10, 0.9, color="#fdd1b0"))  # light peach
+    # Stratum corneum surface
+    ax.add_patch(Rectangle((0, 4.1), 10, 0.2, color="#fbe4cf"))
 
+    # Microneedle patch base (above skin)
+    ax.add_patch(Rectangle((1, 4.5), 8, 0.25, color="#f4a259", ec="black"))
+
+    # Microneedles (triangles)
+    needle_positions = [2, 4.5, 7]
+    for x_center in needle_positions:
+        width = 0.8
+        height = 1.3
+        top_y = 4.5
+        points = [
+            (x_center - width / 2, top_y),
+            (x_center + width / 2, top_y),
+            (x_center, top_y - height),
+        ]
+        ax.add_patch(Polygon(points, closed=True, color="#2f4b7c", ec="black"))
+
+    # Drug molecules (blue dots)
     if seizure_detected:
-        # Move all the way to receptor layer
-        z_end = np.random.uniform(2.4, 2.9, n_particles)
-        steps = 30
-        delay = 0.08
+        n_dots = 80
+        # Spread deeper into dermis
+        y_min, y_max = 1.0, 3.3
     else:
-        # Mild diffusion, stay nearer to surface
-        z_end = np.random.uniform(0.8, 1.4, n_particles)
-        steps = 25
-        delay = 0.1
+        n_dots = 20
+        # Mostly near top epidermis
+        y_min, y_max = 3.0, 4.0
 
-    placeholder = st.empty()
+    xs = np.random.uniform(1.3, 8.7, n_dots)
+    ys = np.random.uniform(y_min, y_max, n_dots)
+    ax.scatter(xs, ys, s=20, color="#3b82f6", alpha=0.8, label="Drug molecules")
 
-    for i in range(steps + 1):
-        alpha = i / steps
-        zs = (1 - alpha) * z_start + alpha * z_end
-        fig = build_patch_figure(xs, ys, zs, seizure_detected)
-        placeholder.plotly_chart(fig, use_container_width=True)
-        time.sleep(delay)
+    # Nerve / vessel hints (simple squiggles in dermis)
+    for offset in [2.0, 5.0, 8.0]:
+        y_line = 1.8 + 0.3 * np.sin(np.linspace(0, 4, 100))
+        x_line = np.linspace(offset - 1.2, offset + 1.2, 100)
+        ax.plot(x_line, y_line, color="#d14a61", linewidth=1.2, alpha=0.8)
+
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_title("Cross-section of Skin with Smart Microneedle Patch")
+    ax.legend(loc="upper right")
+
+    return fig
 
 
 # ------------------------
@@ -294,21 +277,12 @@ def main():
         st.info("No seizure detected at this threshold. Patch remains in monitoring mode.")
 
     # ------------------------
-    # Step 2: Animated 3D Patch
+    # Step 2: Skin + Patch cartoon
     # ------------------------
-    st.subheader("Step 2 – 3D Smart Microneedle Patch – Drug Release")
-
-    col_static, col_anim = st.columns([1, 1])
-
-    with col_static:
-        st.caption("Static view")
-        fig_static = create_patch_static(seizure_detected)
-        st.plotly_chart(fig_static, use_container_width=True)
-
-    with col_anim:
-        st.caption("Animated drug diffusion")
-        if st.button("▶ Play drug release animation"):
-            animate_patch(seizure_detected)
+    st.subheader("Step 2 – Drug Release into Skin via Smart Microneedle Patch")
+    st.caption("Blue droplets represent drug molecules diffusing into skin layers.")
+    skin_fig = create_skin_patch_figure(seizure_detected)
+    st.pyplot(skin_fig)
 
     # ------------------------
     # Step 3: Caretaker Mobile Alert
