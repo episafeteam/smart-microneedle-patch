@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 import streamlit as st
@@ -50,30 +51,35 @@ def apply_drug_effect(signal, idx_start, idx_end, reduction_factor=0.35):
 
 
 # ------------------------
-# 3D Patch visualization
+# 3D Patch helper
 # ------------------------
 
-def create_patch_3d(seizure_detected):
+def build_patch_figure(xs, ys, zs, seizure_detected):
     fig = go.Figure()
 
     # Patch: rectangle at z=0
     patch_x = [0, 2, 2, 0, 0]
     patch_y = [0, 0, 1, 1, 0]
     patch_z = [0, 0, 0, 0, 0]
-    fig.add_trace(go.Scatter3d(x=patch_x, y=patch_y, z=patch_z, mode="lines", name="Microneedle Patch"))
+    fig.add_trace(go.Scatter3d(x=patch_x, y=patch_y, z=patch_z,
+                               mode="lines", name="Microneedle Patch"))
 
     # Receptor layer at z=3
     rec_x = [0, 2, 2, 0, 0]
     rec_y = [0, 0, 1, 1, 0]
     rec_z = [3, 3, 3, 3, 3]
-    fig.add_trace(go.Scatter3d(x=rec_x, y=rec_y, z=rec_z, mode="lines", name="Receptor Layer"))
+    fig.add_trace(go.Scatter3d(x=rec_x, y=rec_y, z=rec_z,
+                               mode="lines", name="Receptor Layer"))
 
     # Drug particles
-    n_particles = 80 if seizure_detected else 10
-    xs = np.random.uniform(0.1, 1.9, n_particles)
-    ys = np.random.uniform(0.1, 0.9, n_particles)
-    zs = np.random.uniform(0.3, 2.8 if seizure_detected else 0.8, n_particles)
-    fig.add_trace(go.Scatter3d(x=xs, y=ys, z=zs, mode="markers", name="Drug Molecules", marker=dict(size=3)))
+    fig.add_trace(go.Scatter3d(
+        x=xs,
+        y=ys,
+        z=zs,
+        mode="markers",
+        name="Drug Molecules",
+        marker=dict(size=3)
+    ))
 
     fig.update_layout(
         scene=dict(
@@ -86,6 +92,48 @@ def create_patch_3d(seizure_detected):
         title="3D Smart Microneedle Patch – Drug Release",
     )
     return fig
+
+
+def create_patch_static(seizure_detected):
+    n_particles = 80 if seizure_detected else 10
+    xs = np.random.uniform(0.1, 1.9, n_particles)
+    ys = np.random.uniform(0.1, 0.9, n_particles)
+    zs = np.random.uniform(0.3, 2.8 if seizure_detected else 0.8, n_particles)
+    return build_patch_figure(xs, ys, zs, seizure_detected)
+
+
+def animate_patch(seizure_detected):
+    """
+    Simple time-lapse animation of drug moving
+    from patch surface (z≈0) towards receptors (z≈3).
+    """
+    n_particles = 80 if seizure_detected else 20
+
+    xs = np.random.uniform(0.1, 1.9, n_particles)
+    ys = np.random.uniform(0.1, 0.9, n_particles)
+
+    # Start near patch surface
+    z_start = np.random.uniform(0.2, 0.6, n_particles)
+
+    if seizure_detected:
+        # Move all the way to receptor layer
+        z_end = np.random.uniform(2.4, 2.9, n_particles)
+        steps = 30
+        delay = 0.08
+    else:
+        # Mild diffusion, stay nearer to surface
+        z_end = np.random.uniform(0.8, 1.4, n_particles)
+        steps = 25
+        delay = 0.1
+
+    placeholder = st.empty()
+
+    for i in range(steps + 1):
+        alpha = i / steps
+        zs = (1 - alpha) * z_start + alpha * z_end
+        fig = build_patch_figure(xs, ys, zs, seizure_detected)
+        placeholder.plotly_chart(fig, use_container_width=True)
+        time.sleep(delay)
 
 
 # ------------------------
@@ -182,34 +230,28 @@ def main():
 
     col_a, col_b, col_c = st.columns(3)
 
-    # Card 1 – Seizure status
     if seizure_detected:
         seizure_text = "DETECTED"
         seizure_help = f"Seizure detected between {det_start_time:.2f}s and {det_end_time:.2f}s."
     else:
         seizure_text = "NORMAL"
         seizure_help = "RMS did not cross threshold for the minimum duration."
-
     col_a.metric("🧠 Seizure Status", seizure_text, help=seizure_help)
 
-    # Card 2 – Drug delivery
     if seizure_detected:
         drug_text = "EMERGENCY BOLUS"
         drug_help = "Patch delivered a rapid dose in response to seizure."
     else:
         drug_text = "BASELINE"
         drug_help = "Patch operating in background / maintenance mode."
-
     col_b.metric("💊 Drug Delivery", drug_text, help=drug_help)
 
-    # Card 3 – Alert status
     if seizure_detected:
         alert_text = "ALERT SENT"
         alert_help = "Notification pushed to registered caretaker mobile app."
     else:
         alert_text = "MONITORING"
         alert_help = "No abnormal event, no alert necessary."
-
     col_c.metric("📱 Alert Status", alert_text, help=alert_help)
 
     st.markdown("---")
@@ -252,11 +294,21 @@ def main():
         st.info("No seizure detected at this threshold. Patch remains in monitoring mode.")
 
     # ------------------------
-    # Step 2: 3D Patch below
+    # Step 2: Animated 3D Patch
     # ------------------------
     st.subheader("Step 2 – 3D Smart Microneedle Patch – Drug Release")
-    fig3d = create_patch_3d(seizure_detected)
-    st.plotly_chart(fig3d, use_container_width=True)
+
+    col_static, col_anim = st.columns([1, 1])
+
+    with col_static:
+        st.caption("Static view")
+        fig_static = create_patch_static(seizure_detected)
+        st.plotly_chart(fig_static, use_container_width=True)
+
+    with col_anim:
+        st.caption("Animated drug diffusion")
+        if st.button("▶ Play drug release animation"):
+            animate_patch(seizure_detected)
 
     # ------------------------
     # Step 3: Caretaker Mobile Alert
