@@ -108,9 +108,20 @@ def create_skin_patch_figure(seizure_detected: bool):
     # --- Labels / Annotations (dedicated below area) ---
     ax.text(0.5, 4.45, "Patch Base", fontsize=8, color="#333", va="bottom")
     ax.text(0.5, 4.05, "Drug Reservoir", fontsize=8, color="#1d4ed8", va="bottom")
-    ax.text(0.5, 2.2, "Dermis", fontsize=8, color="#4
+    ax.text(0.5, 2.2, "Dermis", fontsize=8, color="#444")
+    ax.text(0.5, 0.6, "Fat Layer", fontsize=8, color="#444")
 
+    # Legend area moved to a clean space below the figure
+    ax.text(5, -0.4, "🔵 Drug molecules (released only during seizure)", 
+            fontsize=8, color="#3b82f6", ha="center", va="center")
 
+    # Hide axes
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    ax.set_title("Smart Microneedle Patch (Cross-section)", fontsize=11, pad=10)
+    plt.tight_layout()
+    return fig
 
 # ------------------------
 # Caretaker phone UI
@@ -290,4 +301,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
